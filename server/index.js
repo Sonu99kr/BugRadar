@@ -4,6 +4,8 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
+const ingest = require("./src/routes/ingest");
+
 const app = express();
 
 app.use(helmet());
@@ -17,12 +19,14 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-app.use("/health", (req, res) => {
+app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 //routes
+
 //api ingestion
+app.use("/api/ingest", ingest);
 
 const PORT = process.env.PORT || 5020;
 app.listen(PORT, () => {
