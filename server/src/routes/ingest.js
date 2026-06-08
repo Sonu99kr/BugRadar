@@ -1,13 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const validateApiKey = require("../middleware/auth");
+const validatePayload = require("../middleware/validatePayload");
+const { generateFingerprint } = require("../utils/fingerprint");
 
-router.post("/", validateApiKey, async (req, res) => {
+router.post("/", validateApiKey, validatePayload, async (req, res) => {
   try {
     const { message, stack, url, userAgent, metadata } = req.body;
 
-    console.log("Incoming error logs:", {
+    const fingerprint = generateFingerprint(message, stack);
+
+    console.log("Valid error payload received:", {
       projectId: req.projectId,
+      fingerprint,
       message,
       stack,
       url,
