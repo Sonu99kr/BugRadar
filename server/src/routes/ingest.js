@@ -3,6 +3,7 @@ const router = express.Router();
 const validateApiKey = require("../middleware/auth");
 const validatePayload = require("../middleware/validatePayload");
 const { generateFingerprint } = require("../utils/fingerprint");
+const { errorQueue } = require("../config/queue");
 
 router.post("/", validateApiKey, validatePayload, async (req, res) => {
   try {
@@ -10,7 +11,7 @@ router.post("/", validateApiKey, validatePayload, async (req, res) => {
 
     const fingerprint = generateFingerprint(message, stack);
 
-    console.log("Valid error payload received:", {
+    await errorQueue.add("ingest-error", {
       projectId: req.projectId,
       fingerprint,
       message,

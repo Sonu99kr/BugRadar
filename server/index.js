@@ -4,6 +4,8 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
+require("./src/workers/errorWorker");
+
 const ingest = require("./src/routes/ingest");
 
 const app = express();
