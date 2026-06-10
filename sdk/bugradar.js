@@ -24,6 +24,34 @@
   window.__BugRadar__ = { config };
   console.log("[BugRadar] Initialized successfully for endpoint:", endPoint);
 
+  const recentErrors = new Map();
+  const DEBOUNCE_MS = 5000;
+
+  function isDuplicate(fingerprint) {
+    const lastSent = recentErrors.get(fingerprint);
+
+    if (!lastSent) return false;
+
+    const elapsed = Date.now() - lastSent;
+
+    if (elapsed < DEBOUNCE_MS) return true;
+
+    return false;
+  }
+
+  function trackError(fingerprint) {
+    recentErrors.set(fingerprint, Date.now());
+
+    setTimeout(() => {
+      recentErrors.delete(fingerprint);
+    }, DEBOUNCE_MS * 2);
+  }
+
+  function getClientFingerprint(message, stack) {
+    const firstLine = stack ? stack.split("\n")[1] || "" : "";
+    return `${message}|${firstLine.trim()}`;
+  }
+
   function buildPayload(message, stack, extraMetadata) {
     return {
       message: String(message).trim(),
@@ -65,19 +93,31 @@
     });
   }
 
+  function captureError(message, stack, extraMetadata) {
+    const fingerprint = getClientFingerprint(message, stack);
+
+    if (isDuplicate(fingerprint)) {
+      console.warn("[BugRadar] Duplicate error suppressed:", message);
+      return;
+    }
+    trackError(fingerprint);
+
+    const payload = buildPayload(message, stack, extraMetadata);
+    sendPayload(payload);
+  }
+
   window.onerror = function (message, source, lineno, colno, error) {
     const stack =
       error && error.stack
         ? error.stack
         : `Error at ${source}:${lineno}:${colno}`;
 
-    const payload = buildPayload(message, stack, {
+    captureError(message, stack, {
       type: "onerror",
       source,
       lineno,
       colno,
     });
-    sendPayload(payload);
   };
 
   window.addEventListener("unhandledrejection", function (event) {
@@ -90,9 +130,8 @@
         ? error.stack
         : `UnhandledRejection: ${message}`;
 
-    const payload = buildPayload(message, stack, {
+    captureError(message, stack, {
       type: "unhandledrejection",
     });
-    sendPayload(payload);
   });
 })();
