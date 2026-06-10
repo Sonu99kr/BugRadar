@@ -11,13 +11,20 @@ const ingest = require("./src/routes/ingest");
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: "*", // during development allow all origins
+    methods: ["POST", "GET"],
+    allowedHeaders: ["Content-Type", "x-api-key"],
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   message: { error: "Too many request" },
+  skip: (req) => req.method === "OPTIONS",
 });
 app.use("/api/", limiter);
 

@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <title>BugRadar SDK Test</title>
+  </head>
+  <body>
+    <h1>BugRadar Test Page</h1>
+
+    <button onclick="triggerError()">Trigger Error</button>
+    <button onclick="triggerPromiseError()">Trigger Promise Error</button>
+
+    <script
+      src="./bugradar.js"
+      data-key="test-api-key-123"
+      data-endpoint="http://localhost:5020/api/ingest"
+    ></script>
+
+    <script>
+      function triggerError() {
+        // This will crash — null has no property 'price'
+        const product = null;
+        console.log(product.price);
+      }
+
+      function triggerPromiseError() {
+        // A promise that rejects with no .catch() to handle it
+        fetch("http://localhost:9999/fake-url-that-does-not-exist");
+      }
+    </script>
+  </body>
+</html>
