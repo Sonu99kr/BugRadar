@@ -1,5 +1,9 @@
-const { tryCatch } = require("bullmq");
 const pool = require("../config/db");
+const crypto = require("crypto");
+
+const hashApiKey = (key) => {
+  return crypto.createHash("sha256").update(key).digest("hex");
+};
 
 const validateApiKey = async (req, res, next) => {
   try {
@@ -9,9 +13,11 @@ const validateApiKey = async (req, res, next) => {
       return res.status(401).json({ error: "API key missing" });
     }
 
+    const hashedKey = hashApiKey(apiKey);
+
     const [rows] = await pool.query(
       "SELECT id From projects WHERE api_key = ?",
-      [apiKey],
+      [hashedKey],
     );
 
     if (rows.length === 0) {
@@ -27,4 +33,4 @@ const validateApiKey = async (req, res, next) => {
   }
 };
 
-module.exports = validateApiKey;
+module.exports = { validateApiKey, hashApiKey };

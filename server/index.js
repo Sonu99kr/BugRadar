@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+const path = require("path");
 
 require("./src/workers/errorWorker");
 
@@ -27,6 +28,16 @@ const limiter = rateLimit({
   skip: (req) => req.method === "OPTIONS",
 });
 app.use("/api/", limiter);
+
+app.use(
+  "/sdk",
+  express.static(path.join(__dirname, "sdk"), {
+    setHeaders: (res) => {
+      res.setHeader("Content-Type", "application/javascript");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    },
+  }),
+);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

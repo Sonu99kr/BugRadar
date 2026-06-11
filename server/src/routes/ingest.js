@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const validateApiKey = require("../middleware/auth");
+const { validateApiKey } = require("../middleware/auth");
 const validatePayload = require("../middleware/validatePayload");
 const { generateFingerprint } = require("../utils/fingerprint");
 const { errorQueue } = require("../config/queue");
