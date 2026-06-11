@@ -33,7 +33,6 @@
     if (!lastSent) return false;
 
     const elapsed = Date.now() - lastSent;
-
     if (elapsed < DEBOUNCE_MS) return true;
 
     return false;
@@ -51,6 +50,24 @@
     const firstLine = stack ? stack.split("\n")[1] || "" : "";
     return `${message}|${firstLine.trim()}`;
   }
+
+  const offlineQueue = [];
+
+  function flushQueue() {
+    if (offlineQueue.length === 0) return;
+
+    console.log(
+      `[BugRadar] Back online — flushing ${offlineQueue.length} queued errors`,
+    );
+
+    const toSend = offlineQueue.splice(0, offlineQueue.length);
+
+    toSend.forEach(function (payload) {
+      sendToServer(payload);
+    });
+  }
+
+  window.addEventListener("online", flushQueue);
 
   function buildPayload(message, stack, extraMetadata) {
     return {
@@ -72,24 +89,22 @@
     };
   }
 
-  function sendPayload(payload) {
-    const body = JSON.stringify(payload);
-
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: "application/json" });
-      const headers = new Headers({ "x-api-key": config.apiKey });
-    }
-
+  function sendToServer(payload) {
     fetch(config.endPoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": config.apiKey,
       },
-      body: body,
+      body: JSON.stringify(payload),
       keepalive: true,
     }).catch(function (err) {
-      console.warn("[BugRadar] Failed to send error:", err.message);
+      if (!navigator.onLine) {
+        console.warn("[BugRadar] Offline — queuing error for later");
+        offlineQueue.push(payload);
+      } else {
+        console.warn("[BugRadar] Failed to send error:", err.message);
+      }
     });
   }
 
@@ -103,7 +118,14 @@
     trackError(fingerprint);
 
     const payload = buildPayload(message, stack, extraMetadata);
-    sendPayload(payload);
+
+    if (!navigator.onLine) {
+      console.warn("[BugRadar] Offline — queuing error for later");
+      offlineQueue.push(payload);
+      return;
+    }
+
+    sendToServer(payload);
   }
 
   window.onerror = function (message, source, lineno, colno, error) {
