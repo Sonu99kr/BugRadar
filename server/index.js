@@ -11,6 +11,20 @@ const ingest = require("./src/routes/ingest");
 
 const app = express();
 
+const REQUIRED_ENV = [
+  "DB_HOST",
+  "DB_USER",
+  "DB_PASSWORD",
+  "DB_NAME",
+  "REDIS_URL",
+  "JWT_SECRET",
+];
+const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error("Missing required env vars:", missing.join(", "));
+  process.exit(1);
+}
+
 app.use(helmet());
 app.use(
   cors({

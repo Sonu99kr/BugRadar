@@ -1,3 +1,11 @@
+const sanitizeHtml = require("sanitize-html");
+
+const sanitize = (str) =>
+  sanitizeHtml(str, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
+
 const validatePayload = async (req, res, next) => {
   const { message, stack, url, userAgent, metadata } = req.body;
 
@@ -35,8 +43,10 @@ const validatePayload = async (req, res, next) => {
     }
   }
 
-  req.body.message = message;
-  req.body.stack = stack;
+  req.body.message = sanitize(message.trim());
+  req.body.stack = sanitize(stack.trim());
+  if (url) req.body.url = sanitize(url.trim());
+  if (userAgent) req.body.userAgent = sanitize(userAgent.trim());
 
   next();
 };
