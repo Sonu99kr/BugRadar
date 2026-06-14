@@ -47,9 +47,8 @@ const limiter = rateLimit({
   message: { error: "Too many request" },
   skip: (req) => req.method === "OPTIONS",
 });
-app.use("/api/", limiter);
 
-app.use("/api/auth", auth);
+app.use("/api/", limiter);
 
 app.use(
   "/sdk",
@@ -60,6 +59,9 @@ app.use(
     },
   }),
 );
+
+app.use("/api/auth", auth);
+app.use("/api/projects", require("./src/routes/projects"));
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

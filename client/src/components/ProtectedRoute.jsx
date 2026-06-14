@@ -4,12 +4,14 @@ import { useAuth } from "../hooks/useAuth";
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
-  // Still checking auth status — don't redirect yet
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  // Not logged in — send to login page
   if (!user) {
     return <Navigate to="/login" replace />;
   }

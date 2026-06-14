@@ -30,7 +30,6 @@ const errors = [
 ];
 
 function LivePanel() {
-  const [pulse, setPulse] = useState(true);
   const [visible, setVisible] = useState(1);
 
   useEffect(() => {
@@ -41,8 +40,8 @@ function LivePanel() {
   }, []);
 
   return (
-    <div className="w-full h-full bg-[#0a0a0a] flex flex-col justify-between p-10 relative overflow-hidden">
-      {/* Subtle grid background */}
+    // LAYOUT CHANGE: added rounded-r-[36px] to match card's right corners
+    <div className="w-full h-full bg-[#0a0a0a] rounded-r-[36px] flex flex-col justify-between p-10 relative overflow-hidden">
       <div
         className="absolute inset-0 opacity-[0.03]"
         style={{
@@ -52,7 +51,6 @@ function LivePanel() {
         }}
       />
 
-      {/* Top — branding */}
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-16">
           <div className="w-7 h-7 bg-indigo-500 rounded-lg flex items-center justify-center">
@@ -87,9 +85,7 @@ function LivePanel() {
         </p>
       </div>
 
-      {/* Middle — live error feed */}
       <div className="relative z-10 flex flex-col gap-3">
-        {/* Live indicator */}
         <div className="flex items-center gap-2 mb-1">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -120,7 +116,6 @@ function LivePanel() {
         ))}
       </div>
 
-      {/* Bottom — stat */}
       <div className="relative z-10 border-t border-[#1a1a1a] pt-6">
         <p className="text-gray-600 text-xs">
           <span className="text-white font-medium">2,847 errors</span> caught
@@ -154,7 +149,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong");
     } finally {
@@ -163,125 +158,146 @@ export default function Login() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#0f0f0f]">
-      {/* Left — form */}
-      <div className="w-full flex flex-col items-center justify-center px-8">
-        <div className="w-full max-w-sm">
-          {/* Logo */}
-          <div className="flex items-center gap-2 mb-10">
-            <div className="w-7 h-7 bg-indigo-500 rounded-lg flex items-center justify-center">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-                  strokeDasharray="3 3"
-                />
-              </svg>
-            </div>
-            <span className="text-white font-semibold text-lg tracking-tight">
-              BugRadar
-            </span>
-          </div>
-
-          <h2 className="text-white text-3xl font-semibold mb-1">Sign in</h2>
-          <p className="text-gray-500 text-sm mb-8">
-            Welcome back. Let's catch some bugs.
-          </p>
-
-          {error && (
-            <div className="mb-6 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-              {error}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-4">
-            {/* Email */}
-            <div>
-              <label className="text-gray-400 text-xs font-medium mb-2 block">
-                Email address
-              </label>
-              <div className="flex items-center bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl h-11 px-4 gap-3 focus-within:border-indigo-500/50 transition-colors">
-                <svg width="15" height="11" viewBox="0 0 16 11" fill="none">
-                  <path
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                    d="M0 .55.571 0H15.43l.57.55v9.9l-.571.55H.57L0 10.45zm1.143 1.138V9.9h13.714V1.69l-6.503 4.8h-.697zM13.749 1.1H2.25L8 5.356z"
-                    fill="#4B5563"
-                  />
-                </svg>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-transparent text-gray-200 placeholder-gray-600 outline-none text-sm w-full"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-gray-400 text-xs font-medium">
-                  Password
-                </label>
-                <a
-                  href="#"
-                  className="text-xs text-indigo-400 hover:text-indigo-300"
+    // LAYOUT CHANGE: was `flex h-screen w-full bg-[#0f0f0f]`
+    // Now: light gray page background, full screen, centers the card
+    <div className="min-h-screen w-full bg-gray-100 flex items-center justify-center p-6">
+      {/* LAYOUT CHANGE: added the floating card wrapper
+          - was: no wrapper, form and panel were direct children of the page
+          - now: card with max-w, rounded-[36px], shadow, border, overflow-hidden
+          - w-full max-w-5xl keeps it responsive
+          - overflow-hidden clips the dark panel to card corners */}
+      <div
+        className="w-full max-w-5xl flex rounded-[36px] overflow-hidden shadow-2xl border border-gray-200"
+        style={{ minHeight: "600px" }}
+      >
+        {/* Left — form
+            LAYOUT CHANGE: was `w-full flex flex-col items-center justify-center px-8`
+            Now: fixed 42% width, white background, left panel of the card */}
+        <div className="w-full lg:w-[42%] flex flex-col justify-center px-10 py-12 bg-white">
+          <div className="w-full max-w-sm mx-auto">
+            {/* Logo — unchanged */}
+            <div className="flex items-center gap-2 mb-10">
+              <div className="w-7 h-7 bg-indigo-500 rounded-lg flex items-center justify-center">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2.5"
                 >
-                  Forgot password?
-                </a>
-              </div>
-              <div className="flex items-center bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl h-11 px-4 gap-3 focus-within:border-indigo-500/50 transition-colors">
-                <svg width="12" height="15" viewBox="0 0 13 17" fill="none">
+                  <circle cx="12" cy="12" r="3" />
                   <path
-                    d="M13 8.5c0-.938-.729-1.7-1.625-1.7h-.812V4.25C10.563 1.907 8.74 0 6.5 0S2.438 1.907 2.438 4.25V6.8h-.813C.729 6.8 0 7.562 0 8.5v6.8c0 .938.729 1.7 1.625 1.7h9.75c.896 0 1.625-.762 1.625-1.7zM4.063 4.25c0-1.406 1.093-2.55 2.437-2.55s2.438 1.144 2.438 2.55V6.8H4.061z"
-                    fill="#4B5563"
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                    strokeDasharray="3 3"
                   />
                 </svg>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-transparent text-gray-200 placeholder-gray-600 outline-none text-sm w-full"
-                  required
-                />
               </div>
+              <span className="text-gray-900 font-semibold text-lg tracking-tight">
+                BugRadar
+              </span>
             </div>
 
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="w-full h-11 rounded-xl text-white bg-indigo-500 hover:bg-indigo-600 transition-colors text-sm font-medium disabled:opacity-60 mt-2"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
+            <h2 className="text-gray-900 text-3xl font-semibold mb-1">
+              Sign in
+            </h2>
+            <p className="text-gray-500 text-sm mb-8">
+              Welcome back. Let's catch some bugs.
+            </p>
+
+            {/* Error — unchanged */}
+            {error && (
+              <div className="mb-6 text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4">
+              {/* Email — unchanged logic, updated border color for light bg */}
+              <div>
+                <label className="text-gray-600 text-xs font-medium mb-2 block">
+                  Email address
+                </label>
+                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl h-11 px-4 gap-3 focus-within:border-indigo-400 transition-colors">
+                  <svg width="15" height="11" viewBox="0 0 16 11" fill="none">
+                    <path
+                      fillRule="evenodd"
+                      clipRule="evenodd"
+                      d="M0 .55.571 0H15.43l.57.55v9.9l-.571.55H.57L0 10.45zm1.143 1.138V9.9h13.714V1.69l-6.503 4.8h-.697zM13.749 1.1H2.25L8 5.356z"
+                      fill="#9CA3AF"
+                    />
+                  </svg>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-transparent text-gray-800 placeholder-gray-400 outline-none text-sm w-full"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password — unchanged logic */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-gray-600 text-xs font-medium">
+                    Password
+                  </label>
+                  <a
+                    href="#"
+                    className="text-xs text-indigo-500 hover:text-indigo-400"
+                  >
+                    Forgot password?
+                  </a>
+                </div>
+                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl h-11 px-4 gap-3 focus-within:border-indigo-400 transition-colors">
+                  <svg width="12" height="15" viewBox="0 0 13 17" fill="none">
+                    <path
+                      d="M13 8.5c0-.938-.729-1.7-1.625-1.7h-.812V4.25C10.563 1.907 8.74 0 6.5 0S2.438 1.907 2.438 4.25V6.8h-.813C.729 6.8 0 7.562 0 8.5v6.8c0 .938.729 1.7 1.625 1.7h9.75c.896 0 1.625-.762 1.625-1.7zM4.063 4.25c0-1.406 1.093-2.55 2.437-2.55s2.438 1.144 2.438 2.55V6.8H4.061z"
+                      fill="#9CA3AF"
+                    />
+                  </svg>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-transparent text-gray-800 placeholder-gray-400 outline-none text-sm w-full"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Submit — unchanged logic */}
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="w-full h-11 rounded-xl text-white bg-indigo-500 hover:bg-indigo-600 transition-colors text-sm font-medium disabled:opacity-60 mt-2"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </div>
+
+            {/* Footer link — unchanged */}
+            <p className="text-gray-500 text-sm mt-6 text-center">
+              Don't have an account?{" "}
+              <Link
+                to="/signup"
+                className="text-indigo-500 hover:text-indigo-400"
+              >
+                Sign up
+              </Link>
+            </p>
           </div>
-
-          <p className="text-gray-600 text-sm mt-6 text-center">
-            Don't have an account?{" "}
-            <Link
-              to="/signup"
-              className="text-indigo-400 hover:text-indigo-300"
-            >
-              Sign up
-            </Link>
-          </p>
         </div>
-      </div>
 
-      {/* Right — live panel (hidden on mobile) */}
-      <div className="hidden lg:block w-full">
-        <LivePanel />
+        {/* Right — LivePanel
+            LAYOUT CHANGE: was `hidden lg:block w-full`
+            Now: fixed 58% width, still hidden on mobile */}
+        <div className="hidden lg:block lg:w-[58%]">
+          <LivePanel />
+        </div>
       </div>
     </div>
   );
