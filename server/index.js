@@ -10,6 +10,7 @@ require("./src/workers/errorWorker");
 
 const ingest = require("./src/routes/ingest");
 const auth = require("./src/routes/auth");
+const project = require("./src/routes/projects");
 
 const app = express();
 
@@ -61,7 +62,7 @@ app.use(
 );
 
 app.use("/api/auth", auth);
-app.use("/api/projects", require("./src/routes/projects"));
+app.use("/api/projects", project);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

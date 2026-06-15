@@ -319,4 +319,63 @@ router.get("/:id/occurrences", authMiddleware, async (req, res) => {
   }
 });
 
+router.get("/:id/browsers", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Ownership check
+    const [projectRows] = await pool.query(
+      "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+      [id, req.user.id],
+    );
+
+    if (projectRows.length === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    // Get all user agents for this project
+    const [rows] = await pool.query(
+      `SELECT o.user_agent
+       FROM occurrences o
+       JOIN error_groups eg ON o.group_id = eg.id
+       WHERE eg.project_id = ?`,
+      [id],
+    );
+
+    // Parse browser from user agent
+    const parseBrowser = (ua) => {
+      if (!ua) return "Unknown";
+      if (ua.includes("Firefox")) return "Firefox";
+      if (ua.includes("Edg")) return "Edge";
+      if (ua.includes("Chrome")) return "Chrome";
+      if (ua.includes("Safari")) return "Safari";
+      if (ua.includes("Opera")) return "Opera";
+      return "Unknown";
+    };
+
+    // Count occurrences per browser
+    const browserMap = {};
+    rows.forEach((row) => {
+      const browser = parseBrowser(row.user_agent);
+      browserMap[browser] = (browserMap[browser] || 0) + 1;
+    });
+
+    const total = rows.length;
+
+    // Convert to array with percentage
+    const browsers = Object.entries(browserMap)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    res.status(200).json({ browsers, total });
+  } catch (err) {
+    console.error("Browser distribution error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
