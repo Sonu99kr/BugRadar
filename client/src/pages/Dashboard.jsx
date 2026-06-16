@@ -12,8 +12,6 @@ import {
 } from "recharts";
 import api from "../api/axios";
 
-// ─── Helpers ───────────────────────────────────────────────────
-
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -51,8 +49,6 @@ function extractType(message) {
   const match = message.match(/^(\w+Error|\w+Exception)/);
   return match ? match[1] : "Error";
 }
-
-// ─── Severity ──────────────────────────────────────────────────
 
 function getSeverity(count) {
   if (count > 100) return "critical";
@@ -105,8 +101,6 @@ function SeverityBadge({ count }) {
   );
 }
 
-// ─── Custom tooltip ────────────────────────────────────────────
-
 function CustomTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
     return (
@@ -121,14 +115,12 @@ function CustomTooltip({ active, payload, label }) {
   return null;
 }
 
-// ─── Browser distribution widget ───────────────────────────────
-
 function BrowserWidget({ projectId }) {
   const [browsers, setBrowsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchBrowsers = async () => {
       try {
         const res = await api.get(`/projects/${projectId}/browsers`);
         setBrowsers(res.data.browsers);
@@ -138,7 +130,7 @@ function BrowserWidget({ projectId }) {
         setLoading(false);
       }
     };
-    fetch();
+    fetchBrowsers();
   }, [projectId]);
 
   const browserColors = {
@@ -155,7 +147,6 @@ function BrowserWidget({ projectId }) {
       <h2 className="text-white text-sm font-medium mb-4">
         Browser distribution
       </h2>
-
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[1, 2, 3].map((i) => (
@@ -188,8 +179,6 @@ function BrowserWidget({ projectId }) {
   );
 }
 
-// ─── Main component ────────────────────────────────────────────
-
 export default function Dashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -205,11 +194,14 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState("last_seen");
   const [severityFilter, setSeverityFilter] = useState("all");
 
+  // ← flashNew is at component level, NOT inside handleLiveMessage
+  const [flashNew, setFlashNew] = useState(false);
+
+  // ─── Live updates ───────────────────────────────────────────
   const handleLiveMessage = useCallback((message) => {
-    const [flashNew, setFlashNew] = useState(false);
     if (message.type !== "new_error") return;
 
-    // 1. Update stats — increment total occurrences
+    // Update stats
     setData((prev) => {
       if (!prev) return prev;
       return {
@@ -222,39 +214,33 @@ export default function Dashboard() {
       };
     });
 
-    // 2. Update error groups — update count or add new group
+    // Update error groups
     setData((prev) => {
       if (!prev) return prev;
-
       const existingIndex = prev.errors.findIndex(
         (e) => e.id === message.groupId,
       );
-
       let updatedErrors;
-
       if (existingIndex !== -1) {
-        // Existing error — increment count and move to top
         updatedErrors = [...prev.errors];
         updatedErrors[existingIndex] = {
           ...updatedErrors[existingIndex],
           count: message.count,
           last_seen: message.timestamp,
         };
+        return { ...prev, errors: updatedErrors };
       } else {
-        // New error group — add to top of list
         updatedErrors = [
           {
             id: message.groupId,
             message: message.message,
-            stack: "",
+            stack: message.stack || "",
             count: message.count,
             first_seen: message.timestamp,
             last_seen: message.timestamp,
           },
           ...prev.errors,
         ];
-
-        // Also increment unique error count
         return {
           ...prev,
           errors: updatedErrors,
@@ -266,11 +252,9 @@ export default function Dashboard() {
           },
         };
       }
-
-      return { ...prev, errors: updatedErrors };
     });
 
-    // 3. Update activity feed — add new occurrence to top
+    // Update activity feed
     setOccurrences((prev) => {
       const newOccurrence = {
         id: `live-${Date.now()}`,
@@ -280,11 +264,12 @@ export default function Dashboard() {
         url: message.url,
         created_at: message.timestamp,
       };
-      // Keep max 10 items
       return [newOccurrence, ...prev].slice(0, 10);
     });
+
+    // Flash the live indicator — state is at component level
     setFlashNew(true);
-    setTimeout(() => setFlashNew(false), 1000);
+    setTimeout(() => setFlashNew(false), 2000);
   }, []);
 
   useWebSocket(id, handleLiveMessage);
@@ -323,7 +308,6 @@ export default function Dashboard() {
     fetchTrend();
   }, [id, trendRange]);
 
-  // Sort + filter errors client side
   const processedErrors = data?.errors
     ? [...data.errors]
         .filter((err) => {
@@ -374,7 +358,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
-      {/* ── Back ─────────────────────────────────────────────── */}
+      {/* Back */}
       <button
         onClick={() => navigate("/dashboard")}
         className="flex items-center gap-2 text-gray-500 hover:text-white text-sm mb-8 transition-colors"
@@ -392,7 +376,7 @@ export default function Dashboard() {
         All projects
       </button>
 
-      {/* ── Header ───────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-white text-2xl font-semibold">{project.name}</h1>
@@ -400,16 +384,26 @@ export default function Dashboard() {
             Error monitoring dashboard
           </p>
         </div>
-        <div className="flex items-center gap-2 border border-[#1f1f1f] rounded-full px-3 py-1.5">
+
+        {/* ← Live indicator with flash */}
+        <div
+          className={`flex items-center gap-2 border rounded-full px-3 py-1.5 transition-all duration-300 ${
+            flashNew ? "border-red-500/40 bg-red-500/10" : "border-[#1f1f1f]"
+          }`}
+        >
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
           </span>
-          <span className="text-gray-500 text-xs">Live</span>
+          <span
+            className={`text-xs transition-colors ${flashNew ? "text-red-400" : "text-gray-500"}`}
+          >
+            {flashNew ? "New error!" : "Live"}
+          </span>
         </div>
       </div>
 
-      {/* ── Stats ────────────────────────────────────────────── */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6">
           <p className="text-gray-500 text-xs mb-2 uppercase tracking-wider">
@@ -437,7 +431,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Trend chart ──────────────────────────────────────── */}
+      {/* Trend chart */}
       <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6 mb-6">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -508,9 +502,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Main grid ────────────────────────────────────────── */}
+      {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-        {/* ── Error groups ───────────────────────────────────── */}
+        {/* Error groups */}
         <div>
           {errors.length === 0 ? (
             <div className="bg-[#111] border border-dashed border-[#2a2a2a] rounded-2xl p-12 flex flex-col items-center text-center">
@@ -550,7 +544,6 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {/* Controls row */}
               <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <h2 className="text-white text-sm font-medium">
                   Error groups
@@ -558,9 +551,7 @@ export default function Dashboard() {
                     {processedErrors.length} shown
                   </span>
                 </h2>
-
                 <div className="flex items-center gap-2">
-                  {/* Severity filter */}
                   <select
                     value={severityFilter}
                     onChange={(e) => setSeverityFilter(e.target.value)}
@@ -572,8 +563,6 @@ export default function Dashboard() {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
-
-                  {/* Sort toggle */}
                   <div className="flex items-center bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl p-1 gap-1">
                     {[
                       { key: "last_seen", label: "Recent" },
@@ -596,7 +585,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* No results after filter */}
               {processedErrors.length === 0 && (
                 <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-8 text-center">
                   <p className="text-gray-500 text-sm">
@@ -619,7 +607,6 @@ export default function Dashboard() {
                     className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] rounded-2xl px-5 py-4 flex items-start justify-between gap-4 transition-colors cursor-pointer"
                   >
                     <div className="flex-1 min-w-0">
-                      {/* Type + file + severity */}
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="text-red-400 text-xs font-mono font-medium bg-red-500/10 px-2 py-0.5 rounded-md shrink-0">
                           {extractType(err.message)}
@@ -629,13 +616,11 @@ export default function Dashboard() {
                         </span>
                         <SeverityBadge count={err.count} />
                       </div>
-
                       <p className="text-gray-300 text-sm truncate mb-2">
                         {err.message.includes(":")
                           ? err.message.split(":").slice(1).join(":").trim()
                           : err.message}
                       </p>
-
                       <div className="flex items-center gap-3">
                         <span className="text-gray-600 text-xs">
                           First {timeAgo(err.first_seen)}
@@ -646,7 +631,6 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-
                     <div className="shrink-0 text-right">
                       <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1 mb-1">
                         <span className="text-red-400 text-sm font-medium font-mono">
@@ -659,7 +643,6 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Pagination */}
               {pagination.pages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-gray-600 text-xs">
@@ -689,7 +672,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* ── Right sidebar ───────────────────────────────────── */}
+        {/* Right sidebar */}
         <div className="flex flex-col gap-4">
           {/* Activity feed */}
           <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-5">

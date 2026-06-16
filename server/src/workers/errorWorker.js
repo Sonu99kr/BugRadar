@@ -50,6 +50,7 @@ const worker = new Worker(
       groupId,
       fingerprint,
       message,
+      stack,
       count,
       url: url || null,
       timestamp: new Date().toISOString(),

@@ -2,6 +2,71 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
+// ─── Helpers ───────────────────────────────────────────────────
+
+function timeAgo(dateStr) {
+  if (!dateStr) return null;
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+// ─── Project status ────────────────────────────────────────────
+
+function getStatus(project) {
+  if (!project.last_seen) {
+    return {
+      label: "SDK not installed",
+      color: "text-yellow-400",
+      dot: "bg-yellow-400",
+    };
+  }
+  const hoursSince =
+    (Date.now() - new Date(project.last_seen).getTime()) / 3600000;
+  if (hoursSince < 24) {
+    return {
+      label: "Active",
+      color: "text-emerald-400",
+      dot: "bg-emerald-400",
+    };
+  }
+  return {
+    label: "No events in 24h",
+    color: "text-red-400",
+    dot: "bg-red-400",
+  };
+}
+
+// ─── Initials + color ──────────────────────────────────────────
+
+function getInitials(name) {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function getColor(id) {
+  const colors = [
+    "bg-indigo-500",
+    "bg-purple-500",
+    "bg-blue-500",
+    "bg-emerald-500",
+    "bg-orange-500",
+    "bg-pink-500",
+  ];
+  return colors[id.charCodeAt(0) % colors.length];
+}
+
+// ─── Main component ────────────────────────────────────────────
+
 export default function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,30 +135,6 @@ export default function Projects() {
     setNewKey(null);
     setError("");
     setProjectName("");
-  };
-
-  // Get initials from project name for the card icon
-  const getInitials = (name) => {
-    return name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  // Random but consistent color per project
-  const getColor = (id) => {
-    const colors = [
-      "bg-indigo-500",
-      "bg-purple-500",
-      "bg-blue-500",
-      "bg-emerald-500",
-      "bg-orange-500",
-      "bg-pink-500",
-    ];
-    const index = id.charCodeAt(0) % colors.length;
-    return colors[index];
   };
 
   if (loading) {
@@ -178,103 +219,135 @@ export default function Projects() {
         </div>
       )}
 
-      {/* Grid layout */}
+      {/* Grid */}
       {projects.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6 flex flex-col gap-4 hover:border-[#2a2a2a] transition-all group"
-            >
-              {/* Card top — icon + menu */}
-              <div className="flex items-start justify-between">
-                <div
-                  className={`w-10 h-10 ${getColor(project.id)} rounded-xl flex items-center justify-center`}
-                >
-                  <span className="text-white text-xs font-bold">
-                    {getInitials(project.name)}
-                  </span>
+          {projects.map((project) => {
+            const status = getStatus(project);
+            return (
+              <div
+                key={project.id}
+                className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6 flex flex-col gap-4 hover:border-[#2a2a2a] transition-all group"
+              >
+                {/* Top — avatar + delete */}
+                <div className="flex items-start justify-between">
+                  <div
+                    className={`w-10 h-10 ${getColor(project.id)} rounded-xl flex items-center justify-center`}
+                  >
+                    <span className="text-white text-xs font-bold">
+                      {getInitials(project.name)}
+                    </span>
+                  </div>
+
+                  {/* Delete */}
+                  {confirmDeleteId === project.id ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDelete(project.id)}
+                        disabled={deletingId === project.id}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-60"
+                      >
+                        {deletingId === project.id ? "Deleting..." : "Confirm"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(project.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                        <path d="M9 6V4h6v2" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
-                {/* Delete */}
-                {confirmDeleteId === project.id ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleDelete(project.id)}
-                      disabled={deletingId === project.id}
-                      className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-60"
-                    >
-                      {deletingId === project.id ? "Deleting..." : "Confirm"}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                {/* Project name + status */}
+                <div>
+                  <h3 className="text-white text-sm font-medium mb-1 truncate">
+                    {project.name}
+                  </h3>
+                  {/* Status badge */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${status.dot}`}
+                    />
+                    <span className={`text-xs ${status.color}`}>
+                      {status.label}
+                    </span>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(project.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14H6L5 6" />
-                      <path d="M10 11v6M14 11v6" />
-                      <path d="M9 6V4h6v2" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+                </div>
 
-              {/* Project name + date */}
-              <div>
-                <h3 className="text-white text-sm font-medium mb-1 truncate">
-                  {project.name}
-                </h3>
-                <p className="text-gray-600 text-xs">
-                  Created{" "}
-                  {new Date(project.created_at).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
+                {/* Stats row */}
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-white text-sm font-medium">
+                      {Number(project.error_count).toLocaleString()}
+                    </p>
+                    <p className="text-gray-600 text-xs">errors</p>
+                  </div>
+                  <div className="w-px h-6 bg-[#1f1f1f]" />
+                  <div>
+                    <p className="text-white text-sm font-medium">
+                      {Number(project.occurrence_count).toLocaleString()}
+                    </p>
+                    <p className="text-gray-600 text-xs">occurrences</p>
+                  </div>
+                  {project.last_seen && (
+                    <>
+                      <div className="w-px h-6 bg-[#1f1f1f]" />
+                      <div>
+                        <p className="text-white text-sm font-medium">
+                          {timeAgo(project.last_seen)}
+                        </p>
+                        <p className="text-gray-600 text-xs">last event</p>
+                      </div>
+                    </>
+                  )}
+                </div>
 
-              {/* Divider */}
-              <div className="border-t border-[#1f1f1f]" />
+                {/* Divider */}
+                <div className="border-t border-[#1f1f1f]" />
 
-              {/* Footer — view errors button */}
-              <button
-                onClick={() => navigate(`/projects/${project.id}`)}
-                className="flex items-center justify-between text-gray-500 hover:text-white text-xs transition-colors group/btn"
-              >
-                <span>View errors</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="group-hover/btn:translate-x-0.5 transition-transform"
+                {/* Footer */}
+                <button
+                  onClick={() => navigate(`/projects/${project.id}`)}
+                  className="flex items-center justify-between text-gray-500 hover:text-white text-xs transition-colors group/btn"
                 >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          ))}
+                  <span>View errors</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="group-hover/btn:translate-x-0.5 transition-transform"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
 
-          {/* Add new project card */}
+          {/* Add new card */}
           <button
             onClick={() => setModalOpen(true)}
             className="border border-dashed border-[#2a2a2a] hover:border-indigo-500/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 transition-colors group"

@@ -11,12 +11,22 @@ const generateApiKey = () => {
   return `br_live_${random}`;
 };
 
+// ─── GET /api/projects ─────────────────────────────────────────
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, name, created_at FROM projects
-       WHERE user_id = ?
-       ORDER BY created_at DESC`,
+      `SELECT
+        p.id,
+        p.name,
+        p.created_at,
+        COUNT(DISTINCT eg.id) as error_count,
+        COALESCE(SUM(eg.count), 0) as occurrence_count,
+        MAX(eg.last_seen) as last_seen
+       FROM projects p
+       LEFT JOIN error_groups eg ON eg.project_id = p.id
+       WHERE p.user_id = ?
+       GROUP BY p.id, p.name, p.created_at
+       ORDER BY p.created_at DESC`,
       [req.user.id],
     );
 
