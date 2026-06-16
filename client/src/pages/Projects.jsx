@@ -78,6 +78,12 @@ export default function Projects() {
   const [copied, setCopied] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [settingsProjectId, setSettingsProjectId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regeneratedKey, setRegeneratedKey] = useState(null);
+  const [regeneratedKeyCopied, setRegeneratedKeyCopied] = useState(false);
 
   const navigate = useNavigate();
 
@@ -127,6 +133,37 @@ export default function Projects() {
       console.error("Delete failed:", err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleRename = async (projectId) => {
+    if (!renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      await api.patch(`/projects/${projectId}`, { name: renameValue });
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId ? { ...p, name: renameValue.trim() } : p,
+        ),
+      );
+      setSettingsProjectId(null);
+      setRenameValue("");
+    } catch (err) {
+      console.error("Rename failed:", err);
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleRegenerateKey = async (projectId) => {
+    setRegenerating(true);
+    try {
+      const res = await api.post(`/projects/${projectId}/regenerate-key`);
+      setRegeneratedKey(res.data.apiKey);
+    } catch (err) {
+      console.error("Regenerate failed:", err);
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -229,7 +266,7 @@ export default function Projects() {
                 key={project.id}
                 className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6 flex flex-col gap-4 hover:border-[#2a2a2a] transition-all group"
               >
-                {/* Top — avatar + delete */}
+                {/* Top — avatar + actions */}
                 <div className="flex items-start justify-between">
                   <div
                     className={`w-10 h-10 ${getColor(project.id)} rounded-xl flex items-center justify-center`}
@@ -239,27 +276,16 @@ export default function Projects() {
                     </span>
                   </div>
 
-                  {/* Delete */}
-                  {confirmDeleteId === project.id ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDelete(project.id)}
-                        disabled={deletingId === project.id}
-                        className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-60"
-                      >
-                        {deletingId === project.id ? "Deleting..." : "Confirm"}
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Settings gear */}
                     <button
-                      onClick={() => setConfirmDeleteId(project.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSettingsProjectId(project.id);
+                        setRenameValue(project.name);
+                        setRegeneratedKey(null);
+                      }}
+                      className="text-gray-600 hover:text-white transition-colors"
                     >
                       <svg
                         width="15"
@@ -269,13 +295,51 @@ export default function Projects() {
                         stroke="currentColor"
                         strokeWidth="1.5"
                       >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                        <path d="M9 6V4h6v2" />
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                       </svg>
                     </button>
-                  )}
+
+                    {/* Delete */}
+                    {confirmDeleteId === project.id ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDelete(project.id)}
+                          disabled={deletingId === project.id}
+                          className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-60"
+                        >
+                          {deletingId === project.id
+                            ? "Deleting..."
+                            : "Confirm"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(project.id)}
+                        className="text-gray-600 hover:text-red-400 transition-colors"
+                      >
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4h6v2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Project name + status */}
@@ -482,6 +546,139 @@ export default function Projects() {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Settings modal */}
+      {settingsProjectId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-white text-base font-medium">
+                Project settings
+              </h3>
+              <button
+                onClick={() => {
+                  setSettingsProjectId(null);
+                  setRegeneratedKey(null);
+                  setRenameValue("");
+                }}
+                className="text-gray-600 hover:text-white transition-colors"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Rename */}
+            <div className="mb-6">
+              <label className="text-gray-400 text-xs font-medium mb-2 block">
+                Project name
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  className="flex-1 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl h-10 px-4 text-gray-200 placeholder-gray-600 outline-none text-sm focus:border-indigo-500/50 transition-colors"
+                  placeholder="Project name"
+                />
+                <button
+                  onClick={() => handleRename(settingsProjectId)}
+                  disabled={renaming || !renameValue.trim()}
+                  className="px-4 h-10 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors disabled:opacity-60"
+                >
+                  {renaming ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+
+            {/* Regenerate API key */}
+            <div className="mb-6 pb-6 border-b border-[#1f1f1f]">
+              <p className="text-gray-400 text-xs font-medium mb-1">API Key</p>
+              <p className="text-gray-600 text-xs mb-3">
+                Regenerating will invalidate the current key immediately.
+              </p>
+
+              {regeneratedKey ? (
+                <div className="bg-[#0a0a0a] border border-green-500/20 rounded-xl p-4 mb-3">
+                  <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider">
+                    New API Key — copy now
+                  </p>
+                  <p className="text-green-400 text-xs font-mono break-all mb-3">
+                    {regeneratedKey}
+                  </p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(regeneratedKey);
+                      setRegeneratedKeyCopied(true);
+                      setTimeout(() => setRegeneratedKeyCopied(false), 2000);
+                    }}
+                    className="w-full h-9 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium transition-colors"
+                  >
+                    {regeneratedKeyCopied ? "Copied!" : "Copy new key"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleRegenerateKey(settingsProjectId)}
+                  disabled={regenerating}
+                  className="w-full h-10 rounded-xl border border-[#2a2a2a] hover:border-orange-500/30 text-gray-400 hover:text-orange-400 text-sm transition-colors disabled:opacity-60"
+                >
+                  {regenerating ? "Regenerating..." : "Regenerate API key"}
+                </button>
+              )}
+            </div>
+
+            {/* Delete */}
+            <div>
+              <p className="text-gray-400 text-xs font-medium mb-1">
+                Danger zone
+              </p>
+              <p className="text-gray-600 text-xs mb-3">
+                Deleting a project removes all errors and occurrences
+                permanently.
+              </p>
+              {confirmDeleteId === settingsProjectId ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      handleDelete(settingsProjectId);
+                      setSettingsProjectId(null);
+                    }}
+                    disabled={deletingId === settingsProjectId}
+                    className="flex-1 h-10 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm hover:bg-red-500/20 transition-colors disabled:opacity-60"
+                  >
+                    {deletingId === settingsProjectId
+                      ? "Deleting..."
+                      : "Yes, delete project"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="flex-1 h-10 rounded-xl border border-[#2a2a2a] text-gray-400 text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(settingsProjectId)}
+                  className="w-full h-10 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm transition-colors"
+                >
+                  Delete project
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

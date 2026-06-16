@@ -485,4 +485,63 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   }
 });
 
+router.patch("/:id", authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || typeof name !== "string" || name.trim() === "") {
+      return res.status(400).json({ error: "Project name is required" });
+    }
+
+    if (name.trim().length > 100) {
+      return res.status(400).json({ error: "Name too long (max 100 chars)" });
+    }
+
+    const [rows] = await pool.query(
+      "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await pool.query("UPDATE projects SET name = ? WHERE id = ?", [
+      name.trim(),
+      req.params.id,
+    ]);
+
+    res.status(200).json({ message: "Project renamed", name: name.trim() });
+  } catch (err) {
+    console.error("Rename project error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/:id/regenerate-key", authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const plainKey = generateApiKey();
+    const hashedKey = hashApiKey(plainKey);
+
+    await pool.query("UPDATE projects SET api_key = ? WHERE id = ?", [
+      hashedKey,
+      req.params.id,
+    ]);
+
+    res.status(200).json({ apiKey: plainKey });
+  } catch (err) {
+    console.error("Regenerate key error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
