@@ -74,28 +74,6 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
-router.delete("/:id", authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const [rows] = await pool.query(
-      "SELECT id FROM projects WHERE id = ? AND user_id = ?",
-      [id, req.user.id],
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-
-    await pool.query("DELETE FROM projects WHERE id = ?", [id]);
-
-    res.status(200).json({ message: "Project deleted" });
-  } catch (err) {
-    console.error("Delete project error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -176,6 +154,103 @@ router.get("/:id/errors", authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error("Get errors error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── GET /api/projects/:id/errors/:errorId ─────────────────────
+// Returns full error detail with occurrence timeline
+router.get("/:id/errors/:errorId", authMiddleware, async (req, res) => {
+  try {
+    const { id, errorId } = req.params;
+
+    // Ownership check — verify project belongs to user
+    const [projectRows] = await pool.query(
+      "SELECT id, name FROM projects WHERE id = ? AND user_id = ?",
+      [id, req.user.id],
+    );
+
+    if (projectRows.length === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    // Get error group — verify it belongs to this project
+    const [errorRows] = await pool.query(
+      `SELECT id, message, stack, count, first_seen, last_seen
+       FROM error_groups
+       WHERE id = ? AND project_id = ?`,
+      [errorId, id],
+    );
+
+    if (errorRows.length === 0) {
+      return res.status(404).json({ error: "Error not found" });
+    }
+
+    const error = errorRows[0];
+
+    // Get recent occurrences for this error
+    const [occurrenceRows] = await pool.query(
+      `SELECT id, url, user_agent, metadata, created_at
+       FROM occurrences
+       WHERE group_id = ?
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [errorId],
+    );
+
+    // Get occurrence timeline — grouped by hour for last 24h
+    const [timelineRows] = await pool.query(
+      `SELECT
+        DATE_FORMAT(created_at, '%H:00') as label,
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as group_key,
+        COUNT(*) as count
+       FROM occurrences
+       WHERE group_id = ?
+         AND created_at >= NOW() - INTERVAL 24 HOUR
+       GROUP BY group_key, label
+       ORDER BY group_key ASC`,
+      [errorId],
+    );
+
+    // Parse browser and OS from user agent
+    const parseBrowser = (ua) => {
+      if (!ua) return "Unknown";
+      if (ua.includes("Firefox")) return "Firefox";
+      if (ua.includes("Edg")) return "Edge";
+      if (ua.includes("Chrome")) return "Chrome";
+      if (ua.includes("Safari")) return "Safari";
+      if (ua.includes("Opera")) return "Opera";
+      return "Unknown";
+    };
+
+    const parseOS = (ua) => {
+      if (!ua) return "Unknown";
+      if (ua.includes("Windows")) return "Windows";
+      if (ua.includes("Mac")) return "macOS";
+      if (ua.includes("Linux")) return "Linux";
+      if (ua.includes("Android")) return "Android";
+      if (ua.includes("iPhone") || ua.includes("iPad")) return "iOS";
+      return "Unknown";
+    };
+
+    // Format occurrences
+    const occurrences = occurrenceRows.map((row) => ({
+      id: row.id,
+      url: row.url,
+      browser: parseBrowser(row.user_agent),
+      os: parseOS(row.user_agent),
+      metadata: row.metadata,
+      created_at: row.created_at,
+    }));
+
+    res.status(200).json({
+      project: projectRows[0],
+      error,
+      occurrences,
+      timeline: timelineRows.map(({ label, count }) => ({ label, count })),
+    });
+  } catch (err) {
+    console.error("Error detail error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -374,6 +449,28 @@ router.get("/:id/browsers", authMiddleware, async (req, res) => {
     res.status(200).json({ browsers, total });
   } catch (err) {
     console.error("Browser distribution error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await pool.query(
+      "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+      [id, req.user.id],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await pool.query("DELETE FROM projects WHERE id = ?", [id]);
+
+    res.status(200).json({ message: "Project deleted" });
+  } catch (err) {
+    console.error("Delete project error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

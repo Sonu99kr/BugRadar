@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const path = require("path");
+const http = require("http");
 require("dotenv").config();
 
 require("./src/workers/errorWorker");
@@ -11,8 +12,6 @@ require("./src/workers/errorWorker");
 const ingest = require("./src/routes/ingest");
 const auth = require("./src/routes/auth");
 const project = require("./src/routes/projects");
-
-const app = express();
 
 const REQUIRED_ENV = [
   "DB_HOST",
@@ -27,6 +26,10 @@ if (missing.length > 0) {
   console.error("Missing required env vars:", missing.join(", "));
   process.exit(1);
 }
+
+const { setupWebSocket } = require("./src/websocket");
+
+const app = express();
 
 app.use(helmet());
 app.use(
@@ -61,19 +64,18 @@ app.use(
   }),
 );
 
-app.use("/api/auth", auth);
-app.use("/api/projects", project);
-
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-//routes
-
-//api ingestion
+app.use("/api/auth", auth);
+app.use("/api/projects", project);
 app.use("/api/ingest", ingest);
 
+const server = http.createServer(app);
+setupWebSocket(server);
+
 const PORT = process.env.PORT || 5020;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`BugRadar server is running on ${PORT}`);
 });

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useWebSocket } from "../hooks/useWebSocket";
 import {
   LineChart,
   Line,
@@ -51,7 +52,60 @@ function extractType(message) {
   return match ? match[1] : "Error";
 }
 
-// ─── Custom tooltip for chart ──────────────────────────────────
+// ─── Severity ──────────────────────────────────────────────────
+
+function getSeverity(count) {
+  if (count > 100) return "critical";
+  if (count > 20) return "high";
+  if (count > 5) return "medium";
+  return "low";
+}
+
+const severityConfig = {
+  critical: {
+    label: "Critical",
+    bg: "bg-red-500/10",
+    border: "border-red-500/20",
+    text: "text-red-400",
+    dot: "bg-red-500",
+  },
+  high: {
+    label: "High",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/20",
+    text: "text-orange-400",
+    dot: "bg-orange-500",
+  },
+  medium: {
+    label: "Medium",
+    bg: "bg-yellow-500/10",
+    border: "border-yellow-500/20",
+    text: "text-yellow-400",
+    dot: "bg-yellow-500",
+  },
+  low: {
+    label: "Low",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/20",
+    text: "text-blue-400",
+    dot: "bg-blue-500",
+  },
+};
+
+function SeverityBadge({ count }) {
+  const severity = getSeverity(count);
+  const config = severityConfig[severity];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-md border ${config.bg} ${config.border} ${config.text}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+      {config.label}
+    </span>
+  );
+}
+
+// ─── Custom tooltip ────────────────────────────────────────────
 
 function CustomTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
@@ -65,6 +119,73 @@ function CustomTooltip({ active, payload, label }) {
     );
   }
   return null;
+}
+
+// ─── Browser distribution widget ───────────────────────────────
+
+function BrowserWidget({ projectId }) {
+  const [browsers, setBrowsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await api.get(`/projects/${projectId}/browsers`);
+        setBrowsers(res.data.browsers);
+      } catch (err) {
+        console.error("Browser fetch failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch();
+  }, [projectId]);
+
+  const browserColors = {
+    Chrome: "bg-blue-500",
+    Safari: "bg-orange-500",
+    Firefox: "bg-purple-500",
+    Edge: "bg-teal-500",
+    Opera: "bg-red-500",
+    Unknown: "bg-gray-500",
+  };
+
+  return (
+    <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-5">
+      <h2 className="text-white text-sm font-medium mb-4">
+        Browser distribution
+      </h2>
+
+      {loading ? (
+        <div className="space-y-3 animate-pulse">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-6 bg-[#1f1f1f] rounded" />
+          ))}
+        </div>
+      ) : browsers.length === 0 ? (
+        <p className="text-gray-600 text-xs text-center py-6">No data yet</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {browsers.map((b) => (
+            <div key={b.name}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-400 text-xs">{b.name}</span>
+                <span className="text-gray-500 text-xs font-mono">
+                  {b.percentage}% · {b.count}
+                </span>
+              </div>
+              <div className="h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${browserColors[b.name] || "bg-gray-500"}`}
+                  style={{ width: `${b.percentage}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Main component ────────────────────────────────────────────
@@ -81,9 +202,93 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const [trendRange, setTrendRange] = useState("24h");
   const [trendLoading, setTrendLoading] = useState(false);
-  const [sortBy, setSortBy] = useState("last_seen"); // 'last_seen' | 'count'
+  const [sortBy, setSortBy] = useState("last_seen");
+  const [severityFilter, setSeverityFilter] = useState("all");
 
-  // Fetch main dashboard data
+  const handleLiveMessage = useCallback((message) => {
+    const [flashNew, setFlashNew] = useState(false);
+    if (message.type !== "new_error") return;
+
+    // 1. Update stats — increment total occurrences
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        stats: {
+          ...prev.stats,
+          totalOccurrences: Number(prev.stats.totalOccurrences) + 1,
+          lastSeen: message.timestamp,
+        },
+      };
+    });
+
+    // 2. Update error groups — update count or add new group
+    setData((prev) => {
+      if (!prev) return prev;
+
+      const existingIndex = prev.errors.findIndex(
+        (e) => e.id === message.groupId,
+      );
+
+      let updatedErrors;
+
+      if (existingIndex !== -1) {
+        // Existing error — increment count and move to top
+        updatedErrors = [...prev.errors];
+        updatedErrors[existingIndex] = {
+          ...updatedErrors[existingIndex],
+          count: message.count,
+          last_seen: message.timestamp,
+        };
+      } else {
+        // New error group — add to top of list
+        updatedErrors = [
+          {
+            id: message.groupId,
+            message: message.message,
+            stack: "",
+            count: message.count,
+            first_seen: message.timestamp,
+            last_seen: message.timestamp,
+          },
+          ...prev.errors,
+        ];
+
+        // Also increment unique error count
+        return {
+          ...prev,
+          errors: updatedErrors,
+          stats: {
+            ...prev.stats,
+            totalGroups: prev.stats.totalGroups + 1,
+            totalOccurrences: Number(prev.stats.totalOccurrences) + 1,
+            lastSeen: message.timestamp,
+          },
+        };
+      }
+
+      return { ...prev, errors: updatedErrors };
+    });
+
+    // 3. Update activity feed — add new occurrence to top
+    setOccurrences((prev) => {
+      const newOccurrence = {
+        id: `live-${Date.now()}`,
+        message: message.message,
+        browser: "Unknown",
+        os: "Unknown",
+        url: message.url,
+        created_at: message.timestamp,
+      };
+      // Keep max 10 items
+      return [newOccurrence, ...prev].slice(0, 10);
+    });
+    setFlashNew(true);
+    setTimeout(() => setFlashNew(false), 1000);
+  }, []);
+
+  useWebSocket(id, handleLiveMessage);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -103,7 +308,6 @@ export default function Dashboard() {
     fetchData();
   }, [id, page]);
 
-  // Fetch trend separately so range toggle doesn't reload everything
   useEffect(() => {
     const fetchTrend = async () => {
       setTrendLoading(true);
@@ -119,12 +323,19 @@ export default function Dashboard() {
     fetchTrend();
   }, [id, trendRange]);
 
-  // Sort errors client-side
-  const sortedErrors = data?.errors
-    ? [...data.errors].sort((a, b) => {
-        if (sortBy === "count") return b.count - a.count;
-        return new Date(b.last_seen) - new Date(a.last_seen);
-      })
+  // Sort + filter errors client side
+  const processedErrors = data?.errors
+    ? [...data.errors]
+        .filter((err) => {
+          if (severityFilter === "all") return true;
+          return getSeverity(err.count) === severityFilter;
+        })
+        .sort((a, b) => {
+          if (sortBy === "count") return b.count - a.count;
+          if (sortBy === "first_seen")
+            return new Date(a.first_seen) - new Date(b.first_seen);
+          return new Date(b.last_seen) - new Date(a.last_seen);
+        })
     : [];
 
   if (loading) {
@@ -163,7 +374,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
-      {/* ── Back button ──────────────────────────────────────── */}
+      {/* ── Back ─────────────────────────────────────────────── */}
       <button
         onClick={() => navigate("/dashboard")}
         className="flex items-center gap-2 text-gray-500 hover:text-white text-sm mb-8 transition-colors"
@@ -191,14 +402,14 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2 border border-[#1f1f1f] rounded-full px-3 py-1.5">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
           </span>
           <span className="text-gray-500 text-xs">Live</span>
         </div>
       </div>
 
-      {/* ── Stats row ────────────────────────────────────────── */}
+      {/* ── Stats ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-6">
           <p className="text-gray-500 text-xs mb-2 uppercase tracking-wider">
@@ -235,7 +446,6 @@ export default function Dashboard() {
               Occurrences over time
             </p>
           </div>
-          {/* Range toggle */}
           <div className="flex items-center bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl p-1 gap-1">
             {["24h", "7d", "30d"].map((range) => (
               <button
@@ -298,8 +508,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Main content grid — errors + activity feed ────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+      {/* ── Main grid ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* ── Error groups ───────────────────────────────────── */}
         <div>
           {errors.length === 0 ? (
@@ -336,61 +546,96 @@ export default function Dashboard() {
   data-endpoint="http://localhost:5020/api/ingest">
 </script>`}
                 </pre>
-                <p className="text-gray-600 text-xs mt-3">
-                  Paste before the closing {"</body>"} tag
-                </p>
               </div>
             </div>
           ) : (
             <>
-              {/* Sort controls */}
-              <div className="flex items-center justify-between mb-3">
+              {/* Controls row */}
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <h2 className="text-white text-sm font-medium">
                   Error groups
                   <span className="text-gray-600 ml-2 font-normal">
-                    {pagination.total} total
+                    {processedErrors.length} shown
                   </span>
                 </h2>
-                <div className="flex items-center bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl p-1 gap-1">
-                  {[
-                    { key: "last_seen", label: "Recent" },
-                    { key: "count", label: "Frequency" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.key}
-                      onClick={() => setSortBy(opt.key)}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        sortBy === opt.key
-                          ? "bg-indigo-500 text-white"
-                          : "text-gray-500 hover:text-white"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+
+                <div className="flex items-center gap-2">
+                  {/* Severity filter */}
+                  <select
+                    value={severityFilter}
+                    onChange={(e) => setSeverityFilter(e.target.value)}
+                    className="bg-[#0a0a0a] border border-[#1f1f1f] text-gray-400 text-xs rounded-xl px-3 py-1.5 outline-none cursor-pointer hover:border-[#2a2a2a] transition-colors"
+                  >
+                    <option value="all">All severity</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+
+                  {/* Sort toggle */}
+                  <div className="flex items-center bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl p-1 gap-1">
+                    {[
+                      { key: "last_seen", label: "Recent" },
+                      { key: "count", label: "Frequency" },
+                      { key: "first_seen", label: "Oldest" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setSortBy(opt.key)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          sortBy === opt.key
+                            ? "bg-indigo-500 text-white"
+                            : "text-gray-500 hover:text-white"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
+              {/* No results after filter */}
+              {processedErrors.length === 0 && (
+                <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-8 text-center">
+                  <p className="text-gray-500 text-sm">
+                    No {severityFilter} severity errors found
+                  </p>
+                  <button
+                    onClick={() => setSeverityFilter("all")}
+                    className="text-indigo-400 text-xs mt-2 hover:text-indigo-300"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col gap-2">
-                {sortedErrors.map((err) => (
+                {processedErrors.map((err) => (
                   <div
                     key={err.id}
-                    className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] rounded-2xl px-5 py-4 flex items-start justify-between gap-4 transition-colors"
+                    onClick={() => navigate(`/projects/${id}/errors/${err.id}`)}
+                    className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] rounded-2xl px-5 py-4 flex items-start justify-between gap-4 transition-colors cursor-pointer"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5">
+                      {/* Type + file + severity */}
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="text-red-400 text-xs font-mono font-medium bg-red-500/10 px-2 py-0.5 rounded-md shrink-0">
                           {extractType(err.message)}
                         </span>
                         <span className="text-gray-600 text-xs font-mono truncate">
                           {extractFile(err.stack)}
                         </span>
+                        <SeverityBadge count={err.count} />
                       </div>
+
                       <p className="text-gray-300 text-sm truncate mb-2">
                         {err.message.includes(":")
                           ? err.message.split(":").slice(1).join(":").trim()
                           : err.message}
                       </p>
+
                       <div className="flex items-center gap-3">
                         <span className="text-gray-600 text-xs">
                           First {timeAgo(err.first_seen)}
@@ -444,70 +689,73 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* ── Activity feed ───────────────────────────────────── */}
-        <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-5 h-fit">
-          <h2 className="text-white text-sm font-medium mb-4">
-            Recent activity
-          </h2>
-
-          {occurrences.length === 0 ? (
-            <p className="text-gray-600 text-xs text-center py-8">
-              No activity yet
-            </p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {occurrences.map((occ, i) => (
-                <div key={occ.id}>
-                  <div className="flex items-start gap-3">
-                    {/* Browser icon placeholder */}
-                    <div className="w-6 h-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#4B5563"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-300 text-xs truncate mb-0.5">
-                        {occ.message.includes(":")
-                          ? occ.message.split(":").slice(1).join(":").trim()
-                          : occ.message}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600 text-xs">
-                          {occ.browser}
-                        </span>
-                        <span className="text-gray-700">·</span>
-                        <span className="text-gray-600 text-xs">{occ.os}</span>
-                        <span className="text-gray-700">·</span>
-                        <span className="text-gray-600 text-xs">
-                          {timeAgo(occ.created_at)}
-                        </span>
+        {/* ── Right sidebar ───────────────────────────────────── */}
+        <div className="flex flex-col gap-4">
+          {/* Activity feed */}
+          <div className="bg-[#111] border border-[#1f1f1f] rounded-2xl p-5">
+            <h2 className="text-white text-sm font-medium mb-4">
+              Recent activity
+            </h2>
+            {occurrences.length === 0 ? (
+              <p className="text-gray-600 text-xs text-center py-6">
+                No activity yet
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {occurrences.map((occ, i) => (
+                  <div key={occ.id}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#4B5563"
+                          strokeWidth="2"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="2" y1="12" x2="22" y2="12" />
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
                       </div>
-                      {occ.url && (
-                        <p className="text-gray-700 text-xs truncate mt-0.5">
-                          {occ.url}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-300 text-xs truncate mb-0.5">
+                          {occ.message.includes(":")
+                            ? occ.message.split(":").slice(1).join(":").trim()
+                            : occ.message}
                         </p>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600 text-xs">
+                            {occ.browser}
+                          </span>
+                          <span className="text-gray-700">·</span>
+                          <span className="text-gray-600 text-xs">
+                            {occ.os}
+                          </span>
+                          <span className="text-gray-700">·</span>
+                          <span className="text-gray-600 text-xs">
+                            {timeAgo(occ.created_at)}
+                          </span>
+                        </div>
+                        {occ.url && (
+                          <p className="text-gray-700 text-xs truncate mt-0.5">
+                            {occ.url}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {i < occurrences.length - 1 && (
+                      <div className="border-t border-[#1a1a1a] mt-3" />
+                    )}
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  {/* Divider between items */}
-                  {i < occurrences.length - 1 && (
-                    <div className="border-t border-[#1a1a1a] mt-3" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Browser distribution */}
+          <BrowserWidget projectId={id} />
         </div>
       </div>
     </div>

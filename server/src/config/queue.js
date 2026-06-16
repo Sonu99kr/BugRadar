@@ -1,4 +1,5 @@
 const { Queue } = require("bullmq");
+const Redis = require("ioredis");
 
 const connection = {
   host: process.env.REDIS_HOST || "localhost",
@@ -7,4 +8,6 @@ const connection = {
 
 const errorQueue = new Queue("error-ingestion", { connection });
 
-module.exports = { errorQueue, connection };
+const publisher = new Redis(connection);
+
+module.exports = { errorQueue, connection, publisher };
