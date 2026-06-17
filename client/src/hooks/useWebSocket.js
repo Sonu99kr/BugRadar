@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import config from "../config";
 
 export function useWebSocket(projectId, onMessage) {
   const wsRef = useRef(null);
@@ -25,7 +26,7 @@ export function useWebSocket(projectId, onMessage) {
         return;
       }
 
-      const ws = new WebSocket("ws://localhost:5020");
+      const ws = new WebSocket(config.wsBase);
       wsRef.current = ws;
 
       ws.onopen = () => {

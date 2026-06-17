@@ -8,6 +8,7 @@ const http = require("http");
 require("dotenv").config();
 
 require("./src/workers/errorWorker");
+require("./src/workers/alertWorker");
 
 const ingest = require("./src/routes/ingest");
 const auth = require("./src/routes/auth");
@@ -20,6 +21,8 @@ const REQUIRED_ENV = [
   "DB_NAME",
   "REDIS_URL",
   "JWT_SECRET",
+  "EMAIL_USER",
+  "EMAIL_PASS",
 ];
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missing.length > 0) {

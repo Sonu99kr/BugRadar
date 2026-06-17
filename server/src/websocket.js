@@ -53,7 +53,6 @@ async function setupWebSocket(server) {
           }
 
           projectClients.get(subscribedProjectId).add(ws);
-          console.log(`Client subscribed to project: ${subscribedProjectId}`);
 
           // Confirm subscription
           ws.send(
@@ -80,7 +79,6 @@ async function setupWebSocket(server) {
           if (clients.size === 0) {
             projectClients.delete(subscribedProjectId);
             await subscriber.unsubscribe(`project:${subscribedProjectId}`);
-            console.log(`Unsubscribed from project: ${subscribedProjectId}`);
           }
         }
       }

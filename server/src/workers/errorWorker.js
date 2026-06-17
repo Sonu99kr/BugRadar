@@ -1,4 +1,5 @@
 const { Worker } = require("bullmq");
+const { alertQueue } = require("../config/alertQueue");
 const pool = require("../config/db");
 const { connection, publisher } = require("../config/queue");
 
@@ -42,6 +43,46 @@ const worker = new Worker(
         metadata ? JSON.stringify(metadata) : null,
       ],
     );
+
+    // ─── Alert threshold check ─────────────────────────────────────
+    const THRESHOLDS = [10, 50, 100];
+    const threshold = THRESHOLDS.find((t) => count === t);
+
+    if (threshold) {
+      // Check if this threshold was already alerted for this group
+      const alertKey = `alert:${groupId}:${threshold}`;
+      const alreadyAlerted = await publisher.get(alertKey);
+
+      if (!alreadyAlerted) {
+        // Mark as alerted in Redis — expires in 30 days
+        await publisher.set(alertKey, "1", "EX", 60 * 60 * 24 * 30);
+
+        // Get project owner email
+        const [ownerRows] = await pool.query(
+          `SELECT u.email, p.name as project_name
+       FROM projects p
+       JOIN users u ON u.id = p.user_id
+       WHERE p.id = ?`,
+          [projectId],
+        );
+
+        if (ownerRows.length > 0) {
+          await alertQueue.add("send-alert", {
+            to: ownerRows[0].email,
+            projectName: ownerRows[0].project_name,
+            errorMessage: message,
+            count,
+            threshold,
+            projectId,
+            groupId,
+          });
+
+          console.log(
+            `🔔 Alert queued for ${ownerRows[0].email} — threshold ${threshold}`,
+          );
+        }
+      }
+    }
 
     // Step 4 — publish to Redis so WebSocket server can forward to dashboard
     const payload = JSON.stringify({

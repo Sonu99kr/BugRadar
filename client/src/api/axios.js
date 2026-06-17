@@ -1,8 +1,9 @@
 import axios from "axios";
+import config from "../config";
 
 const api = axios.create({
-  baseURL: "http://localhost:5020/api",
-  withCredentials: true, // sends httpOnly cookie with every request
+  baseURL: `${config.apiBase}/api`,
+  withCredentials: true,
 });
 
 export default api;
