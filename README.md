@@ -59,7 +59,7 @@ Real-time error monitoring for web applications. Drop one script tag into any we
   Save as: assets/landing.png
 -->
 
-![Landing page](./assets/landing.png)
+![Landing page](./assets/hero.png)
 
 ### Projects dashboard
 
@@ -260,4 +260,4 @@ bugradar/
 
 ## Author
 
-Sonu Kumar — [GitHub](https://github.com/Sonu99kr) · [LinkedIn](https://linkedin.com/in/YOUR_LINKEDIN)
+Sonu Kumar — [GitHub](https://github.com/Sonu99kr) · [LinkedIn](https://www.linkedin.com/in/sonukr1/)
