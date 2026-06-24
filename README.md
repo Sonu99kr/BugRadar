@@ -29,9 +29,9 @@ Real-time error monitoring for web applications. Drop one script tag into any we
   Then replace the URL below
 -->
 
-[![BugRadar Demo](./assets/demo-thumbnail.png)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+<!-- [![BugRadar Demo](./assets/demo-thumbnail.png)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
 
-> Click the image above to watch the demo
+> Click the image above to watch the demo -->
 
 ---
 
@@ -122,7 +122,8 @@ unhandledrejection     BullMQ queue               WebSocket updates
   Export as PNG and save as: assets/architecture.png
   Then uncomment the line below:
 -->
-<!-- ![Architecture](./assets/architecture.png) -->
+
+![Architecture](./assets/architecture.png)
 
 ---
 
