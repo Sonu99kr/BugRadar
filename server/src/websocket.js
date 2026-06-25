@@ -7,10 +7,7 @@ async function setupWebSocket(server) {
   const wss = new WebSocketServer({ server });
 
   const subscriber = createClient({
-    socket: {
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-    },
+    url: process.env.REDIS_URL || "redis://localhost:6379",
   });
 
   await subscriber.connect();
