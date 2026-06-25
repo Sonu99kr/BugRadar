@@ -35,16 +35,19 @@ const { setupWebSocket } = require("./src/websocket");
 const app = express();
 
 app.use(helmet());
+app.use("/api/ingest", cors({ origin: "*" }));
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.FRONTEND_URL
+        : "http://localhost:5173",
     credentials: true,
     methods: ["POST", "GET", "DELETE", "PUT", "PATCH"],
     allowedHeaders: ["Content-Type", "x-api-key"],
   }),
 );
 
-app.use("/api/ingest", cors({ origin: "*" }));
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 
